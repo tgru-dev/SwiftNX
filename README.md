@@ -21,6 +21,10 @@ SwiftNX wraps the complete macOS flow from the [nxnative guide](https://github.c
 
 SwiftNX does **not** include games or keys. You need your own dumps and your own `prod.keys`.
 
+## Download
+
+[Download the latest release](https://github.com/tgru-dev/SwiftNX/releases/latest) for macOS 14 or later. The app is ad-hoc signed; if Gatekeeper blocks the first launch, right-click the app and choose **Open**.
+
 ## Features
 
 | Area | What SwiftNX does |

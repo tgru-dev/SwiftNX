@@ -74,6 +74,10 @@ struct SidebarView: View {
         return .blocked
     }
 
+    private var appVersion: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0.0"
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             HStack(spacing: 10) {
@@ -151,7 +155,7 @@ struct SidebarView: View {
                     .buttonStyle(.link)
                     .font(.system(size: 9.5))
                     Spacer()
-                    Text("v1.0")
+                    Text("v\(appVersion)")
                         .font(.system(size: 9))
                         .foregroundStyle(.tertiary)
                 }

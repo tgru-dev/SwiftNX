@@ -27,7 +27,7 @@ private struct LibraryContent: View {
     }
 
     private let columns = [
-        GridItem(.adaptive(minimum: 225, maximum: 300), spacing: 18, alignment: .top),
+        GridItem(.adaptive(minimum: 240, maximum: 320), spacing: 18, alignment: .top),
     ]
 
     var body: some View {
@@ -240,7 +240,11 @@ private struct GameCard: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(entry.title)
                     .font(.system(size: 14, weight: .semibold))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
                 HStack(spacing: 6) {
                     if let version = entry.version {
                         Text("v\(version)")
@@ -250,26 +254,35 @@ private struct GameCard: View {
                             .font(.system(size: 9.5, design: .monospaced))
                             .lineLimit(1)
                             .truncationMode(.middle)
+                            .layoutPriority(1)
                     }
                 }
                 .font(.system(size: 10))
                 .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-            HStack(spacing: 8) {
+            HStack(spacing: 7) {
                 Button(action: open) {
                     Label("Play", systemImage: "play.fill")
-                        .frame(maxWidth: .infinity)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
+                        .frame(minWidth: 0, maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .controlSize(.small)
+                .frame(minWidth: 0, maxWidth: .infinity)
+                .layoutPriority(1)
                 .disabled(!entry.exists)
 
                 Button(action: reveal) {
                     Image(systemName: "folder")
+                        .frame(width: 16, height: 16)
                 }
                 .buttonStyle(.bordered)
                 .controlSize(.small)
+                .frame(width: 30, height: 22)
                 .help("Show in Finder")
                 .disabled(!entry.exists)
 
@@ -283,12 +296,18 @@ private struct GameCard: View {
                     Button("Remove from Library…", role: .destructive, action: remove)
                 } label: {
                     Image(systemName: "ellipsis")
+                        .frame(width: 16, height: 16)
                 }
                 .menuStyle(.borderlessButton)
-                .frame(width: 22)
+                .menuIndicator(.hidden)
+                .frame(width: 26, height: 22)
+                .fixedSize()
+                .help("More actions")
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
             .opacity(entry.exists ? 1 : 0.6)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(13)
         .background(
             RoundedRectangle(cornerRadius: 17, style: .continuous)
