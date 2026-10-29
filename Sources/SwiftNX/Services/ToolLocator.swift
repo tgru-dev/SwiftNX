@@ -87,6 +87,13 @@ enum AppActions {
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 
+    @discardableResult
+    static func moveToTrash(_ url: URL) throws -> URL? {
+        var resulting: NSURL?
+        try FileManager.default.trashItem(at: url, resultingItemURL: &resulting)
+        return resulting as URL?
+    }
+
     static func openApp(_ url: URL) {
         NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
     }

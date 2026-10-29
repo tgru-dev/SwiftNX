@@ -15,6 +15,8 @@ private struct LibraryContent: View {
     @ObservedObject var library: LibraryStore
     @ObservedObject var environment: EnvironmentModel
     @State private var search = ""
+    @State private var pendingDeletion: LibraryEntry?
+    @State private var deleteError: String?
 
     private var filtered: [LibraryEntry] {
         guard !search.trimmingCharacters(in: .whitespaces).isEmpty else { return library.entries }
@@ -54,7 +56,7 @@ private struct LibraryContent: View {
                                 entry: entry,
                                 open: { app.open(entry) },
                                 reveal: { app.reveal(entry) },
-                                remove: { library.remove(entry) }
+                                delete: { pendingDeletion = entry }
                             )
                         }
                     }
@@ -88,6 +90,56 @@ private struct LibraryContent: View {
                 }
                 .help("Show the folder containing the built apps")
             }
+        }
+        .confirmationDialog(
+            pendingDeletion.map { "Delete “\($0.title)”?" } ?? "Delete game?",
+            isPresented: Binding(
+                get: { pendingDeletion != nil },
+                set: { if !$0 { pendingDeletion = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            if let entry = pendingDeletion {
+                if entry.exists {
+                    Button("Move App to Trash", role: .destructive) {
+                        pendingDeletion = nil
+                        moveToTrash(entry)
+                    }
+                }
+                Button("Remove from Library", role: .destructive) {
+                    pendingDeletion = nil
+                    library.remove(entry)
+                }
+                Button("Cancel", role: .cancel) {
+                    pendingDeletion = nil
+                }
+            }
+        } message: {
+            if let entry = pendingDeletion {
+                Text(entry.exists
+                     ? "Move the built app to the Trash, or remove only its library entry. Game dumps and build files stay untouched."
+                     : "The app is already missing. Remove it from the library?")
+            }
+        }
+        .alert(
+            "Couldn’t delete the app",
+            isPresented: Binding(
+                get: { deleteError != nil },
+                set: { if !$0 { deleteError = nil } }
+            )
+        ) {
+            Button("OK") { deleteError = nil }
+        } message: {
+            Text(deleteError ?? "")
+        }
+    }
+
+    private func moveToTrash(_ entry: LibraryEntry) {
+        do {
+            try AppActions.moveToTrash(entry.url)
+            library.remove(entry)
+        } catch {
+            deleteError = error.localizedDescription
         }
     }
 
@@ -200,7 +252,7 @@ private struct GameCard: View {
     let entry: LibraryEntry
     let open: () -> Void
     let reveal: () -> Void
-    let remove: () -> Void
+    let delete: () -> Void
     @State private var hovering = false
 
     private var icon: NSImage {
@@ -286,6 +338,16 @@ private struct GameCard: View {
                 .help("Show in Finder")
                 .disabled(!entry.exists)
 
+                Button(action: delete) {
+                    Image(systemName: "trash")
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .frame(width: 30, height: 22)
+                .foregroundStyle(Brand.danger)
+                .help("Delete…")
+
                 Menu {
                     Button("Show in Finder", action: reveal).disabled(!entry.exists)
                     Button("Copy Title ID") {
@@ -293,7 +355,7 @@ private struct GameCard: View {
                     }
                     .disabled(entry.titleID == nil)
                     Divider()
-                    Button("Remove from Library…", role: .destructive, action: remove)
+                    Button("Delete…", role: .destructive, action: delete)
                 } label: {
                     Image(systemName: "ellipsis")
                         .frame(width: 16, height: 16)
@@ -326,7 +388,7 @@ private struct GameCard: View {
             Button("Play", action: open).disabled(!entry.exists)
             Button("Show in Finder", action: reveal).disabled(!entry.exists)
             Divider()
-            Button("Remove from Library…", role: .destructive, action: remove)
+            Button("Delete…", role: .destructive, action: delete)
         }
     }
 }
