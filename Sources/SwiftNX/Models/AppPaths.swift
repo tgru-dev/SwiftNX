@@ -18,6 +18,14 @@ enum AppPaths {
         venvDirectory.appendingPathComponent("bin/python3")
     }
 
+    static var keysDirectory: URL {
+        supportDirectory.appendingPathComponent("keys", isDirectory: true)
+    }
+
+    static var defaultKeysFile: URL {
+        keysDirectory.appendingPathComponent("prod.keys")
+    }
+
     static var libraryFile: URL {
         supportDirectory.appendingPathComponent("library.json")
     }
@@ -38,9 +46,13 @@ enum AppPaths {
     }
 
     static func prepare() {
-        for url in [supportDirectory, logsDirectory] {
+        for url in [supportDirectory, logsDirectory, keysDirectory] {
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: keysDirectory.path
+        )
     }
 
     static func expanded(_ path: String) -> String {

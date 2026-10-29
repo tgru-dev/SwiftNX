@@ -6,20 +6,24 @@ struct GameLanguage: Identifiable, Hashable {
     let name: String
     var id: String { code }
 
+    // Kept in the same order and with the same codes as nxnative's NACP table.
     static let supported: [GameLanguage] = [
-        .init(code: "en-US", name: "English (US)"),
-        .init(code: "en-GB", name: "English (UK)"),
-        .init(code: "de", name: "German"),
+        .init(code: "en-US", name: "American English"),
+        .init(code: "en-GB", name: "British English"),
+        .init(code: "ja", name: "Japanese"),
         .init(code: "fr", name: "French"),
+        .init(code: "de", name: "German"),
+        .init(code: "es-419", name: "Latin American Spanish"),
         .init(code: "es", name: "Spanish"),
         .init(code: "it", name: "Italian"),
         .init(code: "nl", name: "Dutch"),
+        .init(code: "fr-CA", name: "Canadian French"),
         .init(code: "pt", name: "Portuguese"),
         .init(code: "ru", name: "Russian"),
-        .init(code: "ja", name: "Japanese"),
         .init(code: "ko", name: "Korean"),
-        .init(code: "zh-Hans", name: "Chinese (Simplified)"),
-        .init(code: "zh-Hant", name: "Chinese (Traditional)"),
+        .init(code: "zh-Hant", name: "Traditional Chinese"),
+        .init(code: "zh-Hans", name: "Simplified Chinese"),
+        .init(code: "pt-BR", name: "Brazilian Portuguese"),
     ]
 }
 
@@ -60,7 +64,10 @@ final class AppSettings: ObservableObject {
             Key.onboarded: false,
         ])
         repositoryPath = defaults.string(forKey: Key.repository) ?? AppPaths.defaultRepository.path
-        keysPath = defaults.string(forKey: Key.keys) ?? ""
+        let savedKeysPath = defaults.string(forKey: Key.keys) ?? ""
+        keysPath = savedKeysPath.isEmpty && FileManager.default.fileExists(atPath: AppPaths.defaultKeysFile.path)
+            ? AppPaths.defaultKeysFile.path
+            : savedKeysPath
         workingRoot = defaults.string(forKey: Key.workingRoot) ?? AppPaths.defaultWorkingRoot.path
         outputDirectory = defaults.string(forKey: Key.outputDirectory) ?? AppPaths.defaultOutputDirectory.path
         language = defaults.string(forKey: Key.language) ?? "en-US"
@@ -96,9 +103,13 @@ final class AppSettings: ObservableObject {
     }
 
     func ensureDirectories() {
-        for url in [workingRootURL, outputDirectoryURL, AppPaths.supportDirectory, AppPaths.logsDirectory] {
+        for url in [workingRootURL, outputDirectoryURL, AppPaths.supportDirectory, AppPaths.logsDirectory, AppPaths.keysDirectory] {
             try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
         }
+        try? FileManager.default.setAttributes(
+            [.posixPermissions: 0o700],
+            ofItemAtPath: AppPaths.keysDirectory.path
+        )
     }
 
     func resetPaths() {
