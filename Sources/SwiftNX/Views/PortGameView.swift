@@ -84,7 +84,7 @@ private struct PortContent: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Select your own game files")
                         .font(.system(size: 17, weight: .semibold, design: .rounded))
-                    Text("Base game and the matching update. Both stay where they are; SwiftNX links them into a working folder.")
+                    Text("Base game and the matching update. Drop files onto a card or choose them; both stay where they are and SwiftNX links them into a working folder.")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                 }
@@ -124,6 +124,13 @@ private struct PortContent: View {
                     onClear: { model.setUpdate(nil) },
                     onDropURL: acceptUpdate
                 )
+
+                DLCDropCard(
+                    urls: model.dlcURLs,
+                    onChoose: chooseDLC,
+                    onRemove: { model.removeDLC($0) },
+                    onDropURLs: acceptDLC
+                )
             }
 
             if let error = model.errorMessage {
@@ -135,48 +142,14 @@ private struct PortContent: View {
                 )
             }
 
-            if !model.dlcURLs.isEmpty {
-                VStack(alignment: .leading, spacing: 7) {
-                    Text("Additional content")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(.secondary)
-                    ForEach(model.dlcURLs, id: \.self) { url in
-                        HStack(spacing: 9) {
-                            Image(systemName: "puzzlepiece.extension.fill")
-                                .foregroundStyle(Brand.purple)
-                            Text(url.lastPathComponent)
-                                .font(.system(size: 11.5))
-                                .lineLimit(1)
-                                .truncationMode(.middle)
-                            Spacer()
-                            Button {
-                                model.removeDLC(url)
-                            } label: {
-                                Image(systemName: "xmark.circle.fill")
-                                    .foregroundStyle(.tertiary)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                        .padding(.horizontal, 11)
-                        .padding(.vertical, 7)
-                        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
-                    }
-                }
-            }
-
-            HStack(spacing: 14) {
-                Button {
-                    chooseDLC()
-                } label: {
-                    Label("Add DLC (optional)", systemImage: "plus")
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                Spacer()
-                Text("A base game and its update must be from the same release.")
+            HStack(spacing: 8) {
+                Image(systemName: "info.circle")
+                    .font(.system(size: 10))
+                Text("A base game and its update must be from the same release. DLC files are optional.")
                     .font(.system(size: 10.5))
-                    .foregroundStyle(.tertiary)
             }
+            .foregroundStyle(.tertiary)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             PathButtonRow(
                 title: "prod.keys",
@@ -234,7 +207,7 @@ private struct PortContent: View {
                             }
                             .labelsHidden()
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            Text("Passed to nxnative as DM_LANG.")
+                            Text("Passed to nxnative as DM_LANG for the next build. The game app can change it later in its own settings.")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.tertiary)
                         }
@@ -586,8 +559,20 @@ private struct PortContent: View {
         panel.canChooseDirectories = false
         panel.allowsMultipleSelection = true
         if panel.runModal() == .OK {
-            model.addDLC(panel.urls.filter { PackageFileKind(url: $0) != nil })
+            acceptDLC(panel.urls)
         }
+    }
+
+    private func acceptDLC(_ urls: [URL]) {
+        let packages = urls.filter { PackageFileKind(url: $0) != nil }
+        guard !packages.isEmpty else {
+            model.errorMessage = "Drop one or more NSP, XCI, NSZ or XCZ files for DLC."
+            return
+        }
+        if model.errorMessage?.hasPrefix("Drop one or more") == true {
+            model.errorMessage = nil
+        }
+        model.addDLC(packages)
     }
 
     private func choosePackage(title: String, message: String, onChoose: @escaping (URL) -> Void) {
@@ -749,19 +734,172 @@ private struct PackageDropCard: View {
             }
         }
         .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted) { providers in
-            guard let provider = providers.first else { return false }
-            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
-                var dropped: URL?
-                if let data = item as? Data {
-                    dropped = URL(dataRepresentation: data, relativeTo: nil)
-                } else if let url = item as? URL {
-                    dropped = url
-                }
-                if let dropped {
-                    DispatchQueue.main.async { onDropURL(dropped) }
+            guard !providers.isEmpty else { return false }
+            DroppedFiles.load(from: providers) { dropped in
+                if let first = dropped.first {
+                    onDropURL(first)
                 }
             }
             return true
+        }
+    }
+}
+
+private struct DLCDropCard: View {
+    let urls: [URL]
+    let onChoose: () -> Void
+    let onRemove: (URL) -> Void
+    let onDropURLs: ([URL]) -> Void
+
+    @State private var isTargeted = false
+
+    private var packageCountText: String {
+        "\(urls.count) package\(urls.count == 1 ? "" : "s")"
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 7) {
+                Image(systemName: "puzzlepiece.extension.fill")
+                    .foregroundStyle(Brand.purple)
+                Text("DLC")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(urls.isEmpty ? "Optional · multiple packages" : packageCountText)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+                Spacer()
+                Button(urls.isEmpty ? "Choose…" : "Add more…", action: onChoose)
+                    .buttonStyle(.plain)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(.secondary)
+            }
+
+            if urls.isEmpty {
+                Button(action: onChoose) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22))
+                            .foregroundStyle(Brand.purple.opacity(0.9))
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Drop DLC files here, or choose them")
+                                .font(.system(size: 12, weight: .medium))
+                            Text("NSP · XCI · NSZ · XCZ · multiple files allowed")
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.tertiary)
+                        }
+                        Spacer()
+                        Image(systemName: "hand.tap")
+                            .font(.system(size: 12))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .padding(13)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .fill(isTargeted ? Brand.purple.opacity(0.12) : Color.primary.opacity(0.025))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(
+                                isTargeted ? Brand.purple.opacity(0.65) : Color.primary.opacity(0.12),
+                                style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                            )
+                    )
+                }
+                .buttonStyle(.plain)
+            } else {
+                VStack(spacing: 6) {
+                    ForEach(urls, id: \.self) { url in
+                        HStack(spacing: 9) {
+                            Image(systemName: "puzzlepiece.extension.fill")
+                                .foregroundStyle(Brand.purple)
+                            Text(url.lastPathComponent)
+                                .font(.system(size: 11.5))
+                                .lineLimit(1)
+                                .truncationMode(.middle)
+                            Spacer()
+                            Button {
+                                onRemove(url)
+                            } label: {
+                                Image(systemName: "xmark.circle.fill")
+                                    .foregroundStyle(.tertiary)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal, 11)
+                        .padding(.vertical, 7)
+                        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8))
+                    }
+                }
+                .padding(9)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isTargeted ? Brand.purple.opacity(0.06) : Color.clear)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(
+                            isTargeted ? Brand.purple.opacity(0.55) : Color.primary.opacity(0.08),
+                            style: StrokeStyle(lineWidth: 1, dash: [5, 4])
+                        )
+                )
+
+                Text("Drop more DLC files here, or use Add more…")
+                    .font(.system(size: 9.5))
+                    .foregroundStyle(isTargeted ? Brand.purple : Color.secondary)
+            }
+        }
+        .onDrop(of: [UTType.fileURL], isTargeted: $isTargeted) { providers in
+            guard !providers.isEmpty else { return false }
+            DroppedFiles.load(from: providers) { dropped in
+                if !dropped.isEmpty {
+                    onDropURLs(dropped)
+                }
+            }
+            return true
+        }
+    }
+}
+
+private enum DroppedFiles {
+    static func load(from providers: [NSItemProvider], completion: @escaping ([URL]) -> Void) {
+        guard !providers.isEmpty else {
+            completion([])
+            return
+        }
+
+        let group = DispatchGroup()
+        let lock = NSLock()
+        var urls = Array<URL?>(repeating: nil, count: providers.count)
+
+        for (index, provider) in providers.enumerated() {
+            group.enter()
+            provider.loadItem(forTypeIdentifier: UTType.fileURL.identifier, options: nil) { item, _ in
+                defer { group.leave() }
+
+                let url: URL?
+                if let data = item as? Data {
+                    url = URL(dataRepresentation: data, relativeTo: nil)
+                } else if let value = item as? URL {
+                    url = value
+                } else if let value = item as? NSURL {
+                    url = value as URL
+                } else if let path = item as? String {
+                    url = URL(fileURLWithPath: path)
+                } else {
+                    url = nil
+                }
+
+                if let url {
+                    lock.lock()
+                    urls[index] = url
+                    lock.unlock()
+                }
+            }
+        }
+
+        group.notify(queue: .main) {
+            completion(urls.compactMap { $0 })
         }
     }
 }
