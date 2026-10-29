@@ -77,7 +77,7 @@ private struct UpdatesContent: View {
                     VStack(alignment: .leading, spacing: 9) {
                         Label("How SwiftNX updates", systemImage: "lock.doc")
                             .font(.system(size: 12, weight: .semibold))
-                        Text("SwiftNX runs a fast-forward-only git pull. Your paths, keys location and game library live in SwiftNX's own Application Support folder, so they are never overwritten. Build caches stay in the working folders and are reused after an update.")
+                        Text("SwiftNX clones nxnative on first launch and checks the newest upstream commit every time the app starts. Existing checkouts are fast-forwarded only: local changes are never discarded. Your paths, keys location and game library live in SwiftNX's own Application Support folder, and build caches stay in the working folders.")
                             .font(.system(size: 10.5))
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -118,7 +118,7 @@ private struct UpdatesContent: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("Clone nxnative")
                         .font(.system(size: 17, weight: .bold, design: .rounded))
-                    Text("SwiftNX uses the open-source nxnative repository as its porting engine. Clone it once into \(AppPaths.abbreviated(settings.repositoryPath)).")
+                    Text("SwiftNX uses the open-source nxnative repository as its porting engine. It normally downloads the checkout into \(AppPaths.abbreviated(settings.repositoryPath)) automatically on launch; you can also clone it here.")
                         .font(.system(size: 11.5))
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

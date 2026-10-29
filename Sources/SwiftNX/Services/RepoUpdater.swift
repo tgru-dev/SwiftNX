@@ -17,8 +17,11 @@ struct RepoInfo {
 final class RepoUpdater: ObservableObject {
     @Published private(set) var info: RepoInfo?
     @Published private(set) var isWorking = false
+    @Published private(set) var isSyncingOnLaunch = false
     @Published private(set) var message: String?
     @Published private(set) var lastChecked: Date?
+
+    var onRepositoryUpdated: (() -> Void)?
 
     private let settings: AppSettings
 
@@ -34,6 +37,107 @@ final class RepoUpdater: ObservableObject {
         guard !isWorking else { return }
         isWorking = true
         Task { await load(showSpinner: true) }
+    }
+
+    /// Clones nxnative on first launch and fast-forwards an existing checkout
+    /// before the app is used. Local changes are never discarded.
+    func syncOnLaunch() {
+        guard !isWorking else { return }
+        isWorking = true
+        isSyncingOnLaunch = true
+        Task {
+            await syncLatest()
+            isWorking = false
+            isSyncingOnLaunch = false
+            lastChecked = Date()
+            onRepositoryUpdated?()
+        }
+    }
+
+    private func syncLatest() async {
+        guard let git = ToolLocator.find("git") else {
+            message = "Automatic nxnative update skipped: git is not installed."
+            return
+        }
+
+        let repo = settings.repositoryURL
+        let fileManager = FileManager.default
+        let repoExists = fileManager.fileExists(atPath: repo.path)
+        let repoIsEmpty = repoExists
+            && ((try? fileManager.contentsOfDirectory(atPath: repo.path)) ?? []).isEmpty
+
+        if !repoExists || repoIsEmpty {
+            try? fileManager.createDirectory(
+                at: repo.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let parent = repo.deletingLastPathComponent()
+            let clone = await run(
+                git: git,
+                arguments: [
+                    "clone", "--quiet",
+                    "https://github.com/seedds/nxnative.git",
+                    repo.path,
+                ],
+                currentDirectory: parent
+            )
+            if clone.succeeded {
+                await load(showSpinner: false)
+                message = "Downloaded the latest nxnative checkout."
+            } else {
+                info = nil
+                message = "Could not download nxnative: \(outputSummary(clone))"
+            }
+            return
+        }
+
+        let probe = await run(git: git, arguments: ["rev-parse", "--is-inside-work-tree"])
+        guard probe.succeeded,
+              probe.stdout.trimmingCharacters(in: .whitespacesAndNewlines) == "true" else {
+            message = "The nxnative folder is not a Git checkout; automatic update skipped."
+            return
+        }
+
+        let fetch = await run(git: git, arguments: ["fetch", "--quiet", "--prune"])
+        await load(showSpinner: false)
+        guard fetch.succeeded else {
+            message = "Could not check nxnative for updates: \(outputSummary(fetch))"
+            return
+        }
+        guard let info else { return }
+
+        if info.dirty {
+            message = info.behind > 0
+                ? "\(info.behind) nxnative update\(info.behind == 1 ? "" : "s") available, but the checkout has local changes. Automatic update skipped."
+                : "nxnative is up to date. Local changes were left untouched."
+            return
+        }
+
+        guard info.behind > 0 else {
+            message = "nxnative is up to date at \(info.commit)."
+            return
+        }
+
+        let pull = await run(git: git, arguments: ["pull", "--ff-only", "--quiet"])
+        if pull.succeeded {
+            await load(showSpinner: false)
+            message = "Updated nxnative to the latest version."
+        } else {
+            message = "Could not fast-forward nxnative: \(outputSummary(pull))"
+        }
+    }
+
+    private func outputSummary(_ result: CommandResult) -> String {
+        let text = result.combinedOutput
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .suffix(3)
+            .joined(separator: " ")
+        if text.isEmpty {
+            return result.status == 0 ? "done" : "git exited with status \(result.status)."
+        }
+        return String(text.prefix(400))
     }
 
     func checkForUpdates() {
@@ -85,7 +189,7 @@ final class RepoUpdater: ObservableObject {
 
     private func load(showSpinner: Bool) async {
         if showSpinner { isWorking = true }
-        defer { isWorking = false }
+        defer { if showSpinner { isWorking = false } }
         lastChecked = Date()
         let repo = settings.repositoryURL
         guard FileManager.default.fileExists(atPath: repo.path) else {
@@ -145,13 +249,17 @@ final class RepoUpdater: ObservableObject {
         }
     }
 
-    private func run(git: String, arguments: [String]) async -> CommandResult {
+    private func run(
+        git: String,
+        arguments: [String],
+        currentDirectory: URL? = nil
+    ) async -> CommandResult {
         do {
             return try await CommandRunner.run(
                 path: git,
                 arguments: arguments,
                 environment: ToolLocator.baseEnvironment(xcodePath: settings.xcodePath),
-                currentDirectory: settings.repositoryURL
+                currentDirectory: currentDirectory ?? settings.repositoryURL
             )
         } catch {
             return CommandResult(status: -1, stdout: "", stderr: error.localizedDescription)

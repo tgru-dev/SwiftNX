@@ -51,6 +51,8 @@ final class EnvironmentModel: ObservableObject {
     @Published private(set) var lastChecked: Date?
     @Published var externalMessage: String?
 
+    private var needsRefresh = false
+
     let settings: AppSettings
 
     init(settings: AppSettings) {
@@ -80,7 +82,10 @@ final class EnvironmentModel: ObservableObject {
     }
 
     func refresh() {
-        guard !isChecking else { return }
+        guard !isChecking else {
+            needsRefresh = true
+            return
+        }
         isChecking = true
         Task { await performChecks() }
     }
@@ -453,5 +458,9 @@ final class EnvironmentModel: ObservableObject {
         checks = results
         isChecking = false
         lastChecked = Date()
+        if needsRefresh {
+            needsRefresh = false
+            refresh()
+        }
     }
 }

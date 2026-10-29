@@ -34,7 +34,7 @@ SwiftNX does **not** include games or keys. You need your own dumps and your own
 | Wizard | Base game + update + optional DLC, app name, language, working/output folders, signing identity. |
 | Build | Runs `build_ipa_from_nsp.py --platform mac-app --progress json` in a staged folder and turns the JSON events into a native progress view. |
 | Library | Persists built apps in `library.json`, reads their Info.plist for the final name/version/title ID. |
-| Updates | Shows branch, commit, dirty state and ahead/behind; pulls upstream only with `--ff-only`, never touching SwiftNX settings. |
+| Updates | Clones nxnative automatically on first launch and fast-forwards it on every app start; shows branch, commit, dirty state and ahead/behind. Local changes and SwiftNX settings are never overwritten. |
 | Safety | No sudo is ever run by SwiftNX. Steps that need a password are opened in Terminal for you. Keys never leave the Mac. |
 
 ## Requirements
@@ -75,7 +75,7 @@ swift Scripts/make-icon.swift Resources
 
 ## First run
 
-1. Open SwiftNX. The welcome screen offers **Set Up My Mac**, which opens **Environment**.
+1. Open SwiftNX. The welcome screen offers **Set Up My Mac**, which opens **Environment**. SwiftNX also clones or updates the nxnative checkout automatically at startup.
 2. Run **Check Again**. Missing Homebrew formulae and the Python environment can be installed with **Set Up Everything**.
 3. Accept the Xcode license once (the button opens a Terminal command). Install the Metal Toolchain from the Environment screen if needed.
 4. Install the .NET SDK if it is missing (button opens a Terminal with `brew install --cask dotnet-sdk`).

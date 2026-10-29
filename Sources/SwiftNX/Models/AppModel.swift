@@ -114,9 +114,13 @@ final class AppModel: ObservableObject {
             self?.updater.refresh()
         }
 
+        updater.onRepositoryUpdated = { [weak self] in
+            self?.environment.refresh()
+        }
+
         Task { [weak self] in
             self?.environment.refresh()
-            self?.updater.refresh()
+            self?.updater.syncOnLaunch()
         }
     }
 
@@ -133,6 +137,10 @@ final class AppModel: ObservableObject {
 
     @discardableResult
     func startBuild() -> Bool {
+        if updater.isSyncingOnLaunch {
+            port.errorMessage = "SwiftNX is updating nxnative. Try again when the update finishes."
+            return false
+        }
         if !environment.checks.isEmpty, !environment.ready {
             port.errorMessage = "Finish the Environment setup before starting a build. \(environment.blockers.first?.title ?? "A required tool is missing.")"
             selection = .environment
