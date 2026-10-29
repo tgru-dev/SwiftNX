@@ -193,7 +193,7 @@ final class EnvironmentModel: ObservableObject {
         // Metal toolchain
         let metal = await ToolLocator.runVersionCommand(
             path: "/usr/bin/xcrun",
-            arguments: ["-sdk", "macosx", "metal", "--version"],
+            arguments: ["--no-cache", "-sdk", "macosx", "metal", "--version"],
             xcodePath: xcode
         )
         let metalLower = metal.output.lowercased()

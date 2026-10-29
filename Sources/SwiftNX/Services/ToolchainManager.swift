@@ -66,18 +66,72 @@ final class ToolchainManager: ObservableObject {
     func installMetalToolchain() {
         guard begin(title: "Installing Metal Toolchain") else { return }
         Task {
-            let environment = ToolLocator.baseEnvironment(xcodePath: settings.xcodePath)
-            let success = await runStep(
+            guard let developer = ToolLocator.developerDirectory(xcodePath: settings.xcodePath) else {
+                await finish(
+                    success: false,
+                    error: "Xcode was not found at \(settings.xcodePath). Choose Xcode.app in Settings first."
+                )
+                return
+            }
+
+            var environment = ToolLocator.baseEnvironment(xcodePath: settings.xcodePath)
+            environment["DEVELOPER_DIR"] = developer
+
+            let downloaded = await runStep(
                 label: "Downloading the Metal Toolchain (this can take a while)",
                 executable: "/usr/bin/xcodebuild",
                 arguments: ["-downloadComponent", "MetalToolchain"],
                 environment: environment
             )
+            guard downloaded else {
+                await finish(
+                    success: false,
+                    error: "The Metal Toolchain could not be downloaded. If Xcode's license is not accepted yet, do that first.\n\n\(recentOutput)"
+                )
+                return
+            }
+
+            // `-downloadComponent` installs the asset, but Xcode also needs to
+            // write XcodeToMetalToolchainIndexMapping.plist for this user.
+            // Without that mapping xcrun keeps reporting the compiler missing.
+            let registered = await runStep(
+                label: "Registering the Metal Toolchain for this user",
+                executable: "/usr/bin/xcodebuild",
+                arguments: ["-showComponent", "MetalToolchain"],
+                environment: environment
+            )
+            guard registered else {
+                await finish(
+                    success: false,
+                    error: "The toolchain downloaded, but macOS could not register it for this user. Open Xcode once, then try again.\n\n\(recentOutput)"
+                )
+                return
+            }
+
+            // A previous failed lookup can live in xcrun's cache. Clear it so
+            // the newly registered toolchain is visible immediately.
+            _ = await runStep(
+                label: "Refreshing the compiler cache",
+                executable: "/usr/bin/xcrun",
+                arguments: ["-k"],
+                environment: environment
+            )
+
+            let verified = await runStep(
+                label: "Verifying the Metal compiler",
+                executable: "/usr/bin/xcrun",
+                arguments: ["--no-cache", "-sdk", "macosx", "metal", "--version"],
+                environment: environment
+            )
             await finish(
-                success: success,
-                error: success ? nil : "The Metal Toolchain could not be installed. If Xcode's license is not accepted yet, do that first."
+                success: verified,
+                error: verified ? nil : "The toolchain is installed, but the Metal compiler is still unavailable. Open Xcode once and retry, or run xcodebuild -showComponent MetalToolchain in Terminal.\n\n\(recentOutput)"
             )
         }
+    }
+
+    private var recentOutput: String {
+        lines.suffix(8).map(\.text).joined(separator: "\n")
     }
 
     func cloneRepository() {

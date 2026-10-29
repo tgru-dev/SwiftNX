@@ -6,7 +6,7 @@ struct SettingsView: View {
     @EnvironmentObject private var app: AppModel
 
     var body: some View {
-        SettingsContent(settings: app.settings)
+        SettingsContent(settings: app.settings, toolchain: app.toolchain)
             .environmentObject(app)
             .frame(width: 650, height: 660)
     }
@@ -15,6 +15,7 @@ struct SettingsView: View {
 private struct SettingsContent: View {
     @EnvironmentObject private var app: AppModel
     @ObservedObject var settings: AppSettings
+    @ObservedObject var toolchain: ToolchainManager
 
     private var version: String {
         (Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String) ?? "1.0"
@@ -115,15 +116,32 @@ private struct SettingsContent: View {
                         )
                         HStack(spacing: 10) {
                             Button("Install Metal Toolchain") {
-                                app.toolchain.installMetalToolchain()
+                                toolchain.installMetalToolchain()
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
+                            .disabled(toolchain.isRunning)
                             Button("Accept Xcode License…") {
-                                app.toolchain.openXcodeLicense()
+                                toolchain.openXcodeLicense()
                             }
                             .buttonStyle(.bordered)
                             .controlSize(.small)
+                            .disabled(toolchain.isRunning)
+                            if toolchain.isRunning {
+                                ProgressView()
+                                    .controlSize(.small)
+                            }
+                        }
+
+                        if toolchain.isRunning {
+                            Text(toolchain.title.isEmpty ? "Working…" : toolchain.title)
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(.secondary)
+                        } else if let error = toolchain.lastError {
+                            Text(error)
+                                .font(.system(size: 9.5))
+                                .foregroundStyle(Brand.danger)
+                                .lineLimit(3)
                         }
                     }
 
@@ -160,6 +178,13 @@ private struct SettingsContent: View {
                 }
                 .padding(24)
             }
+        }
+        .sheet(isPresented: Binding(
+            get: { toolchain.isLogPresented },
+            set: { if !$0 { toolchain.dismissLog() } }
+        )) {
+            SetupLogView()
+                .environmentObject(app)
         }
     }
 
